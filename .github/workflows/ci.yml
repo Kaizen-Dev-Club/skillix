@@ -1,0 +1,128 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-validation:
+    name: Repository & Documentation Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Markdown and Repository Structure
+        run: |
+          echo "Validating repository structure..."
+          test -f README.md || (echo "Missing README.md" && exit 1)
+          test -f CONTRIBUTING.md || (echo "Missing CONTRIBUTING.md" && exit 1)
+          test -f CODE_OF_CONDUCT.md || (echo "Missing CODE_OF_CONDUCT.md" && exit 1)
+          test -f SECURITY.md || (echo "Missing SECURITY.md" && exit 1)
+          test -f LICENSE || (echo "Missing LICENSE" && exit 1)
+          test -d docs || (echo "Missing docs directory" && exit 1)
+          test -d frontend || (echo "Missing frontend directory" && exit 1)
+          test -d backend || (echo "Missing backend directory" && exit 1)
+          echo "Repository structure verified successfully."
+
+  backend-checks:
+    name: Backend Lint, Typecheck, Test & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if backend package.json exists
+        id: check_backend
+        run: |
+          if [ -f "package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Backend package.json not yet created by team. Skipping build steps."
+          fi
+
+      - name: Set up Node.js
+        if: steps.check_backend.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check_backend.outputs.exists == 'true'
+        run: npm ci
+
+      - name: Run ESLint
+        if: steps.check_backend.outputs.exists == 'true'
+        run: npm run lint
+
+      - name: Validate TypeScript types
+        if: steps.check_backend.outputs.exists == 'true'
+        run: npm run typecheck
+
+      - name: Execute automated tests
+        if: steps.check_backend.outputs.exists == 'true'
+        run: npm run test
+
+      - name: Compile backend TypeScript
+        if: steps.check_backend.outputs.exists == 'true'
+        run: npm run build
+
+  frontend-checks:
+    name: Frontend Lint, Typecheck, Test & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if frontend package.json exists
+        id: check_frontend
+        run: |
+          if [ -f "package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Frontend package.json not yet created by team. Skipping build steps."
+          fi
+
+      - name: Set up Node.js
+        if: steps.check_frontend.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check_frontend.outputs.exists == 'true'
+        run: npm ci
+
+      - name: Run ESLint
+        if: steps.check_frontend.outputs.exists == 'true'
+        run: npm run lint
+
+      - name: Validate TypeScript types
+        if: steps.check_frontend.outputs.exists == 'true'
+        run: npm run typecheck
+
+      - name: Execute automated tests
+        if: steps.check_frontend.outputs.exists == 'true'
+        run: npm run test
+
+      - name: Build Next.js application
+        if: steps.check_frontend.outputs.exists == 'true'
+        run: npm run build
